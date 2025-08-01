@@ -15,7 +15,9 @@ var (
 	router        = mux.NewRouter()
 	realmPath     = "/r/kontribz"
 	organizations avl.Tree // orgID -> *Organization
+	tasks         avl.Tree // taskID -> *Task
 	orgCounter    int      // organization counter
+	taskCounter   int      // task counter
 )
 
 type Organization struct {
@@ -26,9 +28,28 @@ type Organization struct {
 	Bio       string
 	Website   string
 	Admin     std.Address
-	Tasks     []int // task IDs (for later)
+	Tasks     []int // task IDs
 	CreatedAt int64
 }
+
+type Task struct {
+	ID             int
+	OrganizationID int
+	Title          string
+	Description    string
+	Reward         string
+	Status         TaskStatus
+	Assignee       std.Address
+	CreatedAt      int64
+}
+
+type TaskStatus int
+
+const (
+	TaskOpen TaskStatus = iota
+	TaskAssigned
+	TaskCompleted
+)
 
 func init() {
 	router.HandleFunc("", homeHandler)
@@ -36,6 +57,9 @@ func init() {
 	router.HandleFunc("organization/create", organizationCreateHandler)
 	router.HandleFunc("organization/{id}", organizationHandler)
 	router.HandleFunc("organizations", organizationsHandler)
+	router.HandleFunc("task/create", taskCreateHandler)
+	router.HandleFunc("task/{id}", taskHandler)
+	router.HandleFunc("tasks", tasksHandler)
 }
 
 func Render(path string) string {
@@ -48,14 +72,17 @@ func homeHandler(res *mux.ResponseWriter, req *mux.Request) {
 
 	b.WriteString("## 📊 Platform Statistics\n\n")
 	orgCount := organizations.Size()
+	taskCount := tasks.Size()
 	b.WriteString("- **Organizations:** " + strconv.Itoa(orgCount) + "\n")
-	b.WriteString("- **Tasks:** 0\n")
+	b.WriteString("- **Tasks:** " + strconv.Itoa(taskCount) + "\n")
 	b.WriteString("- **Applications:** 0\n\n")
 
 	b.WriteString("## 🚀 Quick Actions\n\n")
 	b.WriteString("- [Create Your Profile](" + realmPath + ":profile/create) - Start by creating your user profile\n")
 	b.WriteString("- [Create Organization](" + realmPath + ":organization/create) - Create your organization\n")
-	b.WriteString("- [Browse Organizations](" + realmPath + ":organizations) - View all organizations\n\n")
+	b.WriteString("- [Browse Organizations](" + realmPath + ":organizations) - View all organizations\n")
+	b.WriteString("- [Create Task](" + realmPath + ":task/create) - Create your task\n")
+	b.WriteString("- [Browse Tasks](" + realmPath + ":tasks) - View all tasks\n\n")
 
 	res.Write(b.String())
 }
@@ -95,6 +122,163 @@ func organizationCreateHandler(res *mux.ResponseWriter, req *mux.Request) {
 	b.WriteString("- **Bio** (optional): Organization description\n")
 	b.WriteString("- **Website** (optional): Organization website\n")
 	b.WriteString("- **Avatar** (optional): Organization avatar URL\n\n")
+
+	res.Write(b.String())
+}
+
+func taskCreateHandler(res *mux.ResponseWriter, req *mux.Request) {
+	var b strings.Builder
+
+	b.WriteString("# 📝 Create Task\n\n")
+	b.WriteString("[← Back to Home](" + realmPath + ")\n\n")
+
+	b.WriteString("Create a new task/bounty for one of your organizations.\n\n")
+
+	b.WriteString("## You must have an organization to create a task/bounty\n\n")
+
+	createTaskLink := txlink.Call("CreateTask", "id", "", "title", "", "description", "", "reward", "")
+
+	b.WriteString("[Create Task](" + createTaskLink + ")\n\n")
+
+	b.WriteString("## Task Parameters\n\n")
+	b.WriteString("When creating a task, you need to provide:\n")
+	b.WriteString("- **Organization ID** (required): ID of your organization\n")
+	b.WriteString("- **Title** (required): Task title\n")
+	b.WriteString("- **Description** (required): Task description\n")
+	b.WriteString("- **Reward** (optional): Reward for completing the task\n\n")
+
+	res.Write(b.String())
+}
+
+func tasksHandler(res *mux.ResponseWriter, req *mux.Request) {
+	var b strings.Builder
+
+	b.WriteString("# 📋 All Tasks\n\n")
+	b.WriteString("[← Back to Home](" + realmPath + ")\n\n")
+
+	taskCount := tasks.Size()
+	if taskCount == 0 {
+		b.WriteString("**No tasks yet.**\n\n")
+		b.WriteString("Organizations can create tasks for their bounties.\n\n")
+		b.WriteString("[Create First Task](" + realmPath + ":task/create)\n\n")
+		res.Write(b.String())
+		return
+	}
+
+	b.WriteString("**Total Tasks:** " + strconv.Itoa(taskCount) + "\n\n")
+
+	// Collect tasks by status
+	openTasks := []*Task{}
+	assignedTasks := []*Task{}
+	completedTasks := []*Task{}
+
+	tasks.Iterate("", "", func(key string, value interface{}) bool {
+		task := value.(*Task)
+		switch task.Status {
+		case TaskOpen:
+			openTasks = append(openTasks, task)
+		case TaskAssigned:
+			assignedTasks = append(assignedTasks, task)
+		case TaskCompleted:
+			completedTasks = append(completedTasks, task)
+		}
+		return false
+	})
+
+	// Display open tasks
+	b.WriteString("## 🟢 Open Tasks (" + strconv.Itoa(len(openTasks)) + ")\n\n")
+	if len(openTasks) == 0 {
+		b.WriteString("No open tasks.\n\n")
+	} else {
+		for _, task := range openTasks {
+			renderTaskSummary(&b, task)
+		}
+	}
+
+	// Display assigned tasks
+	b.WriteString("## 🟡 Assigned Tasks (" + strconv.Itoa(len(assignedTasks)) + ")\n\n")
+	if len(assignedTasks) == 0 {
+		b.WriteString("No assigned tasks.\n\n")
+	} else {
+		for _, task := range assignedTasks {
+			renderTaskSummary(&b, task)
+		}
+	}
+
+	// Display completed tasks
+	b.WriteString("## ✅ Completed Tasks (" + strconv.Itoa(len(completedTasks)) + ")\n\n")
+	if len(completedTasks) == 0 {
+		b.WriteString("No completed tasks.\n\n")
+	} else {
+		for _, task := range completedTasks {
+			renderTaskSummary(&b, task)
+		}
+	}
+
+	res.Write(b.String())
+}
+
+func taskHandler(res *mux.ResponseWriter, req *mux.Request) {
+	var b strings.Builder
+
+	taskIDStr := req.GetVar("id")
+	taskID, err := strconv.Atoi(taskIDStr)
+	if err != nil {
+		b.WriteString("# ❌ Error\n\n")
+		b.WriteString("Invalid task ID: " + taskIDStr + "\n")
+		res.Write(b.String())
+		return
+	}
+
+	task := getTask(taskID)
+	if task == nil {
+		b.WriteString("# ❌ Not Found\n\n")
+		b.WriteString("Task #" + taskIDStr + " not found.\n\n")
+		b.WriteString("[← Back to Tasks](" + realmPath + ":tasks)\n")
+		res.Write(b.String())
+		return
+	}
+
+	org := getOrganization(task.OrganizationID)
+	if org == nil {
+		b.WriteString("# ❌ Error\n\n")
+		b.WriteString("Organization not found for this task.\n")
+		res.Write(b.String())
+		return
+	}
+
+	b.WriteString("# 📝 " + task.Title + "\n\n")
+	b.WriteString("[← Back to Tasks](" + realmPath + ":tasks) | ")
+	b.WriteString("[View Organization](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + ")\n\n")
+
+	// Task info
+	b.WriteString("**Organization:** [" + org.Name + "](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + ")\n")
+	b.WriteString("**Status:** " + getTaskStatusText(task.Status) + "\n")
+
+	if task.Reward != "" {
+		b.WriteString("**Reward:** " + task.Reward + "\n")
+	}
+
+	if task.Assignee != "" {
+		assigneeName := profile.GetStringField(task.Assignee, "DisplayName", "Unknown")
+		b.WriteString("**Assignee:** " + assigneeName + " (`" + task.Assignee.String() + "`)\n")
+	}
+
+	b.WriteString("**Created:** Block #" + strconv.FormatInt(task.CreatedAt, 10) + "\n\n")
+
+	b.WriteString("## Description\n\n")
+	b.WriteString(task.Description + "\n\n")
+
+	// Admin actions
+	caller := std.OriginCaller()
+	if caller == org.Admin {
+		b.WriteString("## ⚙️ Admin Actions\n\n")
+		if task.Status == TaskOpen {
+			b.WriteString("- Assign Task (coming soon)\n")
+		}
+		b.WriteString("- Edit Task (coming soon)\n")
+		b.WriteString("- Delete Task (coming soon)\n\n")
+	}
 
 	res.Write(b.String())
 }
@@ -188,25 +372,40 @@ func organizationHandler(res *mux.ResponseWriter, req *mux.Request) {
 		b.WriteString("**Website:** [" + org.Website + "](" + org.Website + ")\n")
 	}
 
-	// Tasks (for later)
+	// Tasks
 	b.WriteString("\n## 📋 Tasks (" + strconv.Itoa(len(org.Tasks)) + ")\n\n")
 
 	if len(org.Tasks) == 0 {
 		b.WriteString("No tasks yet.\n\n")
 	} else {
-		b.WriteString("*Task management coming soon...*\n\n")
+		for _, taskID := range org.Tasks {
+			task := getTask(taskID)
+			if task != nil {
+				status := getTaskStatusText(task.Status)
+				b.WriteString("- [" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") - " + status + "\n")
+			}
+		}
+		b.WriteString("\n")
 	}
 
 	caller := std.OriginCaller()
 	if caller == org.Admin {
 		b.WriteString("## ⚙️ Admin Actions\n\n")
-		b.WriteString("- Create New Task (coming soon)\n")
+
+		createTaskLink := txlink.Call("CreateTask",
+			strconv.Itoa(org.ID), // orgID
+			"",                   // title
+			"",                   // description
+			"")                   // reward
+
+		b.WriteString("- [Create New Task](" + createTaskLink + ")\n")
 		b.WriteString("- Edit Organization (coming soon)\n")
 	}
 
 	res.Write(b.String())
 }
 
+// Public functions that can be called via transactions
 func CreateOrganization(cur realm, name, domain, bio, website, avatar string) {
 	caller := std.OriginCaller()
 
@@ -235,12 +434,116 @@ func CreateOrganization(cur realm, name, domain, bio, website, avatar string) {
 	organizations.Set(strconv.Itoa(orgCounter), org)
 }
 
-// Helper function
+func CreateTask(cur realm, orgIDStr, title, description, reward string) {
+	caller := std.OriginCaller()
+
+	if orgIDStr == "" || title == "" || description == "" {
+		panic("Organization ID, title and description are required")
+	}
+
+	orgID, err := strconv.Atoi(orgIDStr)
+	if err != nil {
+		panic("Invalid organization ID")
+	}
+
+	org := getOrganization(orgID)
+	if org == nil {
+		panic("Organization not found")
+	}
+
+	if org.Admin != caller {
+		panic("Only organization admin can create tasks")
+	}
+
+	taskCounter++
+	task := &Task{
+		ID:             taskCounter,
+		OrganizationID: orgID,
+		Title:          title,
+		Description:    description,
+		Reward:         reward,
+		Status:         TaskOpen,
+		Assignee:       "",
+		CreatedAt:      std.ChainHeight(),
+	}
+
+	tasks.Set(strconv.Itoa(taskCounter), task)
+
+	// Add task to organization
+	org.Tasks = append(org.Tasks, taskCounter)
+	organizations.Set(strconv.Itoa(orgID), org)
+}
+
+// Helper functions
 func getOrganization(orgID int) *Organization {
 	orgI, ok := organizations.Get(strconv.Itoa(orgID))
 	if !ok {
 		return nil
 	}
 	return orgI.(*Organization)
+}
+
+func getTask(taskID int) *Task {
+	taskI, ok := tasks.Get(strconv.Itoa(taskID))
+	if !ok {
+		return nil
+	}
+	return taskI.(*Task)
+}
+
+func getUserOrganizations(addr std.Address) []*Organization {
+	var userOrgs []*Organization
+
+	organizations.Iterate("", "", func(key string, value interface{}) bool {
+		org := value.(*Organization)
+		if org.Admin == addr {
+			userOrgs = append(userOrgs, org)
+		}
+		return false
+	})
+
+	return userOrgs
+}
+
+func getTaskStatusText(status TaskStatus) string {
+	switch status {
+	case TaskOpen:
+		return "🟢 Open"
+	case TaskAssigned:
+		return "🟡 Assigned"
+	case TaskCompleted:
+		return "✅ Completed"
+	default:
+		return "Unknown"
+	}
+}
+
+func renderTaskSummary(b *strings.Builder, task *Task) {
+	org := getOrganization(task.OrganizationID)
+	if org == nil {
+		return
+	}
+
+	b.WriteString("---\n\n")
+	b.WriteString("### [" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ")\n\n")
+
+	b.WriteString("**Organization:** [" + org.Name + "](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + ")\n")
+	b.WriteString("**Status:** " + getTaskStatusText(task.Status) + "\n")
+
+	if task.Reward != "" {
+		b.WriteString("**Reward:** " + task.Reward + "\n")
+	}
+
+	if task.Assignee != "" {
+		assigneeName := profile.GetStringField(task.Assignee, "DisplayName", "Unknown")
+		b.WriteString("**Assignee:** " + assigneeName + "\n")
+	}
+
+	// Show truncated description
+	description := task.Description
+	if len(description) > 100 {
+		description = description[:97] + "..."
+	}
+	b.WriteString("**Description:** " + description + "\n\n")
 }
 
