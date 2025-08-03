@@ -61,7 +61,7 @@ func max(a, b int) int {
 
 // Kanban rendering functions
 func renderUserKanbanPreview(addr std.Address) string {
-	var b strings.Builder
+	var out string
 
 	// Collect user's assigned tasks
 	var userTasks []*Task
@@ -74,11 +74,11 @@ func renderUserKanbanPreview(addr std.Address) string {
 	})
 
 	if len(userTasks) == 0 {
-		b.WriteString("No assigned tasks yet.\n\n")
-		return b.String()
+		out += "No assigned tasks yet.\n\n"
+		return out
 	}
 
-	b.WriteString("**Assigned Tasks:** " + strconv.Itoa(len(userTasks)) + "\n\n")
+	out += md.Bold("Assigned Tasks:") + " " + strconv.Itoa(len(userTasks)) + "\n\n"
 
 	// Count by status for preview
 	todoCount := 0
@@ -99,16 +99,16 @@ func renderUserKanbanPreview(addr std.Address) string {
 		}
 	}
 
-	b.WriteString("📝 Todo: " + strconv.Itoa(todoCount) + " | ")
-	b.WriteString("🔄 In Progress: " + strconv.Itoa(progressCount) + " | ")
-	b.WriteString("👀 Review: " + strconv.Itoa(reviewCount) + " | ")
-	b.WriteString("✅ Done: " + strconv.Itoa(doneCount) + "\n\n")
+	out += "📝 Todo: " + strconv.Itoa(todoCount) + " | "
+	out += "🔄 In Progress: " + strconv.Itoa(progressCount) + " | "
+	out += "👀 Review: " + strconv.Itoa(reviewCount) + " | "
+	out += "✅ Done: " + strconv.Itoa(doneCount) + "\n\n"
 
-	return b.String()
+	return out
 }
 
 func renderUserKanban(addr std.Address) string {
-	var b strings.Builder
+	var out string
 
 	// Collect user's assigned tasks
 	var userTasks []*Task
@@ -121,8 +121,8 @@ func renderUserKanban(addr std.Address) string {
 	})
 
 	if len(userTasks) == 0 {
-		b.WriteString("No assigned tasks yet.\n\n")
-		return b.String()
+		out += "No assigned tasks yet.\n\n"
+		return out
 	}
 
 	// Organize by kanban status
@@ -145,13 +145,13 @@ func renderUserKanban(addr std.Address) string {
 	}
 
 	// Render kanban columns
-	b.WriteString("| 📝 Todo (" + strconv.Itoa(len(todoTasks)) + ") | 🔄 In Progress (" + strconv.Itoa(len(inProgressTasks)) + ") | 👀 Review (" + strconv.Itoa(len(reviewTasks)) + ") | ✅ Done (" + strconv.Itoa(len(doneTasks)) + ") |\n")
-	b.WriteString("|---------|------------------|----------|----------|\n")
+	out += "| 📝 Todo (" + strconv.Itoa(len(todoTasks)) + ") | 🔄 In Progress (" + strconv.Itoa(len(inProgressTasks)) + ") | 👀 Review (" + strconv.Itoa(len(reviewTasks)) + ") | ✅ Done (" + strconv.Itoa(len(doneTasks)) + ") |\n"
+	out += "|---------|------------------|----------|----------|\n"
 
 	maxRows := max(max(len(todoTasks), len(inProgressTasks)), max(len(reviewTasks), len(doneTasks)))
 
 	for i := 0; i < maxRows; i++ {
-		b.WriteString("| ")
+		out += "| "
 
 		// Todo column
 		if i < len(todoTasks) {
@@ -161,9 +161,9 @@ func renderUserKanban(addr std.Address) string {
 			if org != nil {
 				orgName = org.Name
 			}
-			b.WriteString("[" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") @ " + orgName)
+			out += md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID)) + " @ " + orgName
 		}
-		b.WriteString(" | ")
+		out += " | "
 
 		// In Progress column
 		if i < len(inProgressTasks) {
@@ -173,9 +173,9 @@ func renderUserKanban(addr std.Address) string {
 			if org != nil {
 				orgName = org.Name
 			}
-			b.WriteString("[" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") @ " + orgName)
+			out += md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID)) + " @ " + orgName
 		}
-		b.WriteString(" | ")
+		out += " | "
 
 		// Review column
 		if i < len(reviewTasks) {
@@ -185,9 +185,9 @@ func renderUserKanban(addr std.Address) string {
 			if org != nil {
 				orgName = org.Name
 			}
-			b.WriteString("[" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") @ " + orgName)
+			out += md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID)) + " @ " + orgName
 		}
-		b.WriteString(" | ")
+		out += " | "
 
 		// Done column
 		if i < len(doneTasks) {
@@ -197,13 +197,13 @@ func renderUserKanban(addr std.Address) string {
 			if org != nil {
 				orgName = org.Name
 			}
-			b.WriteString("[" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") @ " + orgName)
+			out += md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID)) + " @ " + orgName
 		}
-		b.WriteString(" |\n")
+		out += " |\n"
 	}
 
-	b.WriteString("\n")
-	return b.String()
+	out += "\n"
+	return out
 }
 
 func renderOrganizationKanbanPreview(org *Organization) string {
