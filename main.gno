@@ -174,33 +174,17 @@ func taskCreateHandler(res *mux.ResponseWriter, req *mux.Request) {
 	out += md.H1("📝 Create Task") + "\n\n"
 	out += md.Link("← Back to Home", realmPath) + "\n\n"
 
-	caller := std.OriginCaller()
-
-	// Get user's organizations
-	userOrgs := getUserOrganizations(caller)
-
-	if len(userOrgs) == 0 {
-		out += md.H2("❌ No Organizations Found") + "\n\n"
-		out += "You need to be an admin of at least one organization to create tasks.\n\n"
-		out += md.Link("Create Organization", realmPath+":organization/create") + "\n\n"
-		res.Write(out)
-		return
-	}
-
 	out += "Create a new task/bounty for one of your organizations.\n\n"
 
 	out += md.H2("Your Organizations") + "\n\n"
-	for _, org := range userOrgs {
-		out += md.H3(org.Name+" (ID: "+strconv.Itoa(org.ID)+")") + "\n\n"
 
-		createTaskLink := txlink.Call("CreateTask",
-			strconv.Itoa(org.ID), // orgID
-			"",                   // title
-			"",                   // description
-			"")                   // reward
+	createTaskLink := txlink.Call("CreateTask",
+		"", // orgID
+		"", // title
+		"", // description
+		"") // reward
 
-		out += md.Bold("Create task for this organization:") + " " + md.Link("Create Task", createTaskLink) + "\n\n"
-	}
+	out += md.Bold("Create task for this organization:") + " " + md.Link("Create Task", createTaskLink) + "\n\n"
 
 	out += md.H2("Task Parameters") + "\n\n"
 	out += "When creating a task, you need to provide:\n"
