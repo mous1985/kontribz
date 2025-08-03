@@ -507,7 +507,7 @@ func usersHandler(res *mux.ResponseWriter, req *mux.Request) {
 }
 
 func userHandler(res *mux.ResponseWriter, req *mux.Request) {
-	var b strings.Builder
+	var out string
 
 	addrStr := req.GetVar("addr")
 	addr := std.Address(addrStr)
@@ -515,24 +515,24 @@ func userHandler(res *mux.ResponseWriter, req *mux.Request) {
 	// Get profile info
 	name := profile.GetStringField(addr, "DisplayName", "Unknown")
 
-	b.WriteString("# 👤 " + name + "\n\n")
-	b.WriteString("[← Back to Users](" + realmPath + ":users)\n\n")
+	out += md.H1("👤 "+name) + "\n\n"
+	out += md.Link("← Back to Users", realmPath+":users") + "\n\n"
 
 	// Profile info
-	b.WriteString("**Address:** `" + addrStr + "`\n\n")
+	out += md.Bold("Address:") + " `" + addrStr + "`\n\n"
 
 	// User's organizations
 	userOrgs := getUserOrganizations(addr)
 	if len(userOrgs) > 0 {
-		b.WriteString("## 🏢 Organizations (" + strconv.Itoa(len(userOrgs)) + ")\n\n")
+		out += md.H2("🏢 Organizations ("+strconv.Itoa(len(userOrgs))+")") + "\n\n"
 		for _, org := range userOrgs {
-			b.WriteString("- [" + org.Name + "](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + ") - " + strconv.Itoa(len(org.Tasks)) + " tasks\n")
+			out += md.BulletItem(md.Link(org.Name, realmPath+":organization/"+strconv.Itoa(org.ID))+" - "+strconv.Itoa(len(org.Tasks))+" tasks") + "\n"
 		}
-		b.WriteString("\n")
+		out += "\n"
 	}
 
 	// User's applications
-	b.WriteString("## 📨 Applications\n\n")
+	out += md.H2("📨 Applications") + "\n\n"
 
 	pendingApps := []*Application{}
 	acceptedApps := []*Application{}
@@ -554,67 +554,70 @@ func userHandler(res *mux.ResponseWriter, req *mux.Request) {
 	})
 
 	// Pending applications
-	b.WriteString("### ⏳ Pending (" + strconv.Itoa(len(pendingApps)) + ")\n\n")
+	out += md.H3("⏳ Pending ("+strconv.Itoa(len(pendingApps))+")") + "\n\n"
 	if len(pendingApps) == 0 {
-		b.WriteString("No pending applications.\n\n")
+		out += "No pending applications.\n\n"
 	} else {
+		pendingItems := []string{}
 		for _, app := range pendingApps {
 			task := getTask(app.TaskID)
 			if task != nil {
 				org := getOrganization(task.OrganizationID)
 				if org != nil {
-					b.WriteString("- [" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") at [" + org.Name + "](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + ")\n")
+					pendingItems = append(pendingItems, md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID))+" at "+md.Link(org.Name, realmPath+":organization/"+strconv.Itoa(org.ID)))
 				}
 			}
 		}
-		b.WriteString("\n")
+		out += md.BulletList(pendingItems) + "\n\n"
 	}
 
 	// Accepted applications (assigned tasks)
-	b.WriteString("### ✅ Accepted/Assigned (" + strconv.Itoa(len(acceptedApps)) + ")\n\n")
+	out += md.H3("✅ Accepted/Assigned ("+strconv.Itoa(len(acceptedApps))+")") + "\n\n"
 	if len(acceptedApps) == 0 {
-		b.WriteString("No accepted applications.\n\n")
+		out += "No accepted applications.\n\n"
 	} else {
+		acceptedItems := []string{}
 		for _, app := range acceptedApps {
 			task := getTask(app.TaskID)
 			if task != nil {
 				org := getOrganization(task.OrganizationID)
 				if org != nil {
 					status := getTaskStatusText(task.Status)
-					b.WriteString("- [" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") at [" + org.Name + "](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + ") - " + status + "\n")
+					acceptedItems = append(acceptedItems, md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID))+" at "+md.Link(org.Name, realmPath+":organization/"+strconv.Itoa(org.ID))+" - "+status)
 				}
 			}
 		}
-		b.WriteString("\n")
+		out += md.BulletList(acceptedItems) + "\n\n"
 	}
 
 	// Rejected applications
-	b.WriteString("### ❌ Rejected (" + strconv.Itoa(len(rejectedApps)) + ")\n\n")
+	out += md.H3("❌ Rejected ("+strconv.Itoa(len(rejectedApps))+")") + "\n\n"
 	if len(rejectedApps) == 0 {
-		b.WriteString("No rejected applications.\n\n")
+		out += "No rejected applications.\n\n"
 	} else {
+		rejectedItems := []string{}
 		for _, app := range rejectedApps {
 			task := getTask(app.TaskID)
 			if task != nil {
 				org := getOrganization(task.OrganizationID)
 				if org != nil {
-					b.WriteString("- [" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") at [" + org.Name + "](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + ")\n")
+					rejectedItems = append(rejectedItems, md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID))+" at "+md.Link(org.Name, realmPath+":organization/"+strconv.Itoa(org.ID)))
 				}
 			}
 		}
-		b.WriteString("\n")
+		out += md.BulletList(rejectedItems) + "\n\n"
 	}
 
 	// Personal Kanban Board for assigned tasks
-	b.WriteString("## 📋 Personal Kanban Board\n\n")
-	b.WriteString("[View Full Kanban](" + realmPath + ":user/" + addrStr + "/kanban)\n\n")
-	b.WriteString(renderUserKanbanPreview(addr))
+	out += md.H2("📋 Personal Kanban Board") + "\n\n"
+	out += md.Link("View Full Kanban", realmPath+":user/"+addrStr+"/kanban") + "\n\n"
+	out += renderUserKanbanPreview(addr)
 
-	res.Write(b.String())
+	res.Write(out)
 }
 
 func userKanbanHandler(res *mux.ResponseWriter, req *mux.Request) {
-	var b strings.Builder
+	var out string
 
 	addrStr := req.GetVar("addr")
 	addr := std.Address(addrStr)
@@ -622,24 +625,24 @@ func userKanbanHandler(res *mux.ResponseWriter, req *mux.Request) {
 	// Get profile info
 	name := profile.GetStringField(addr, "DisplayName", "Unknown")
 
-	b.WriteString("# 📋 " + name + " - Kanban Board\n\n")
-	b.WriteString("[← Back to Profile](" + realmPath + ":user/" + addrStr + ")\n\n")
+	out += md.H1("📋 "+name+" - Kanban Board") + "\n\n"
+	out += md.Link("← Back to Profile", realmPath+":user/"+addrStr) + "\n\n"
 
 	// Full kanban board
-	b.WriteString(renderUserKanban(addr))
+	out += renderUserKanban(addr)
 
 	// Admin actions if viewing own kanban
 	caller := std.OriginCaller()
 	if caller == addr {
-		b.WriteString("## ⚙️ Kanban Actions\n\n")
-		b.WriteString("*Update kanban status for your assigned tasks:*\n\n")
+		out += md.H2("⚙️ Kanban Actions") + "\n\n"
+		out += md.Italic("Update kanban status for your assigned tasks:") + "\n\n"
 
 		// List assigned tasks with update links
 		tasks.Iterate("", "", func(key string, value interface{}) bool {
 			task := value.(*Task)
 			if task.Assignee == addr && task.Status == TaskAssigned {
-				b.WriteString("### " + task.Title + "\n\n")
-				b.WriteString("**Current Status:** " + getKanbanStatusText(task.KanbanStatus) + "\n\n")
+				out += md.H3(task.Title) + "\n\n"
+				out += md.Bold("Current Status:") + " " + getKanbanStatusText(task.KanbanStatus) + "\n\n"
 
 				// Action links for kanban status
 				todoLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "0")     // KanbanTodo
@@ -648,128 +651,139 @@ func userKanbanHandler(res *mux.ResponseWriter, req *mux.Request) {
 				doneLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "3")     // KanbanDone
 				completeLink := txlink.Call("CompleteTask", strconv.Itoa(task.ID))
 
-				b.WriteString("**Update Status:**\n")
-				b.WriteString("- [📝 Todo](" + todoLink + ")\n")
-				b.WriteString("- [🔄 In Progress](" + progressLink + ")\n")
-				b.WriteString("- [👀 Review](" + reviewLink + ")\n")
-				b.WriteString("- [✅ Done](" + doneLink + ")\n")
-				b.WriteString("- [🎉 Complete Task](" + completeLink + ")\n\n")
+				actionItems := []string{
+					md.Link("📝 Todo", todoLink),
+					md.Link("🔄 In Progress", progressLink),
+					md.Link("👀 Review", reviewLink),
+					md.Link("✅ Done", doneLink),
+					md.Link("🎉 Complete Task", completeLink),
+				}
+
+				out += md.Bold("Update Status:") + "\n"
+				out += md.BulletList(actionItems) + "\n\n"
 			}
 			return false
 		})
 	}
 
-	res.Write(b.String())
+	res.Write(out)
 }
 
 func organizationsHandler(res *mux.ResponseWriter, req *mux.Request) {
-	var b strings.Builder
+	var out string
 
-	b.WriteString("# 🏢 All Organizations\n\n")
-	b.WriteString("[← Back to Home](" + realmPath + ")\n\n")
+	out += md.H1("🏢 All Organizations") + "\n\n"
+	out += md.Link("← Back to Home", realmPath) + "\n\n"
 
 	orgCount := organizations.Size()
 	if orgCount == 0 {
-		b.WriteString("**No organizations yet.**\n\n")
-		b.WriteString("Be the first to create one!\n\n")
-		b.WriteString("[Create First Organization](" + realmPath + ":organization/create)\n\n")
-		res.Write(b.String())
+		out += md.Bold("No organizations yet.") + "\n\n"
+		out += "Be the first to create one!\n\n"
+		out += md.Link("Create First Organization", realmPath+":organization/create") + "\n\n"
+		res.Write(out)
 		return
 	}
 
-	b.WriteString("**Total Organizations:** " + strconv.Itoa(orgCount) + "\n\n")
+	out += md.Bold("Total Organizations:") + " " + strconv.Itoa(orgCount) + "\n\n"
 
 	organizations.Iterate("", "", func(key string, value interface{}) bool {
 		org := value.(*Organization)
 
 		adminName := profile.GetStringField(org.Admin, "DisplayName", "Unknown")
 
-		b.WriteString("---\n\n")
-		b.WriteString("### [" + org.Name + "](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + ")\n\n")
+		out += md.HorizontalRule() + "\n\n"
+		out += md.H3(md.Link(org.Name, realmPath+":organization/"+strconv.Itoa(org.ID))) + "\n\n"
 
 		if org.Avatar != "" {
-			b.WriteString("![Avatar](" + org.Avatar + ")\n\n")
+			out += "![Avatar](" + org.Avatar + ")\n\n"
 		}
 
-		b.WriteString("**Domain:** @" + org.Domain + "\n")
-		b.WriteString("**Admin:** " + adminName + " (`" + org.Admin.String() + "`)\n")
-		b.WriteString("**Tasks:** " + strconv.Itoa(len(org.Tasks)) + "\n")
+		orgInfoItems := []string{
+			md.Bold("Domain:") + " @" + org.Domain,
+			md.Bold("Admin:") + " " + adminName + " (`" + org.Admin.String() + "`)",
+			md.Bold("Tasks:") + " " + strconv.Itoa(len(org.Tasks)),
+		}
 
 		if org.Bio != "" {
-			b.WriteString("**Bio:** " + org.Bio + "\n")
+			orgInfoItems = append(orgInfoItems, md.Bold("Bio:")+" "+org.Bio)
 		}
 
 		if org.Website != "" {
-			b.WriteString("**Website:** [" + org.Website + "](" + org.Website + ")\n")
+			orgInfoItems = append(orgInfoItems, md.Bold("Website:")+" "+md.Link(org.Website, org.Website))
 		}
 
-		b.WriteString("\n")
+		out += md.BulletList(orgInfoItems) + "\n\n"
 		return false
 	})
 
-	res.Write(b.String())
+	res.Write(out)
 }
 
 func organizationHandler(res *mux.ResponseWriter, req *mux.Request) {
-	var b strings.Builder
+	var out string
 
 	orgIDStr := req.GetVar("id")
 	orgID, err := strconv.Atoi(orgIDStr)
 	if err != nil {
-		b.WriteString("# ❌ Error\n\n")
-		b.WriteString("Invalid organization ID: " + orgIDStr + "\n")
-		res.Write(b.String())
+		out += md.H1("❌ Error") + "\n\n"
+		out += "Invalid organization ID: " + orgIDStr + "\n"
+		res.Write(out)
 		return
 	}
 
 	org := getOrganization(orgID)
 	if org == nil {
-		b.WriteString("# ❌ Not Found\n\n")
-		b.WriteString("Organization #" + orgIDStr + " not found.\n\n")
-		b.WriteString("[← Back to Organizations](" + realmPath + ":organizations)\n")
-		res.Write(b.String())
+		out += md.H1("❌ Not Found") + "\n\n"
+		out += "Organization #" + orgIDStr + " not found.\n\n"
+		out += md.Link("← Back to Organizations", realmPath+":organizations") + "\n"
+		res.Write(out)
 		return
 	}
 
-	b.WriteString("# 🏢 " + org.Name + "\n\n")
-	b.WriteString("[← Back to Organizations](" + realmPath + ":organizations)\n\n")
+	out += md.H1("🏢 "+org.Name) + "\n\n"
+	out += md.Link("← Back to Organizations", realmPath+":organizations") + "\n\n"
 
 	if org.Avatar != "" {
-		b.WriteString("![Avatar](" + org.Avatar + ")\n\n")
+		out += "![Avatar](" + org.Avatar + ")\n\n"
 	}
 
-	b.WriteString("**Domain:** @" + org.Domain + "\n")
-
 	adminName := profile.GetStringField(org.Admin, "DisplayName", "Unknown")
-	b.WriteString("**Admin:** " + adminName + " (`" + org.Admin.String() + "`)\n")
+
+	orgDetailsItems := []string{
+		md.Bold("Domain:") + " @" + org.Domain,
+		md.Bold("Admin:") + " " + adminName + " (`" + org.Admin.String() + "`)",
+	}
 
 	if org.Bio != "" {
-		b.WriteString("**Bio:** " + org.Bio + "\n")
+		orgDetailsItems = append(orgDetailsItems, md.Bold("Bio:")+" "+org.Bio)
 	}
 
 	if org.Website != "" {
-		b.WriteString("**Website:** [" + org.Website + "](" + org.Website + ")\n")
+		orgDetailsItems = append(orgDetailsItems, md.Bold("Website:")+" "+md.Link(org.Website, org.Website))
 	}
 
+	out += md.BulletList(orgDetailsItems) + "\n\n"
+
 	// Tasks
-	b.WriteString("\n## 📋 Tasks (" + strconv.Itoa(len(org.Tasks)) + ")\n\n")
+	out += md.H2("📋 Tasks ("+strconv.Itoa(len(org.Tasks))+")") + "\n\n"
 
 	if len(org.Tasks) == 0 {
-		b.WriteString("No tasks yet.\n\n")
+		out += "No tasks yet.\n\n"
 	} else {
+		taskItems := []string{}
 		for _, taskID := range org.Tasks {
 			task := getTask(taskID)
 			if task != nil {
 				status := getTaskStatusText(task.Status)
-				b.WriteString("- [" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") - " + status + "\n")
+				taskItems = append(taskItems, md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID))+" - "+status)
 			}
 		}
-		b.WriteString("\n")
+		out += md.BulletList(taskItems) + "\n\n"
 	}
 
 	caller := std.OriginCaller()
 	if caller == org.Admin {
-		b.WriteString("## ⚙️ Admin Actions\n\n")
+		out += md.H2("⚙️ Admin Actions") + "\n\n"
 
 		createTaskLink := txlink.Call("CreateTask",
 			strconv.Itoa(org.ID), // orgID
@@ -777,8 +791,12 @@ func organizationHandler(res *mux.ResponseWriter, req *mux.Request) {
 			"",                   // description
 			"")                   // reward
 
-		b.WriteString("- [Create New Task](" + createTaskLink + ")\n")
-		b.WriteString("- Edit Organization (coming soon)\n\n")
+		adminActionItems := []string{
+			md.Link("Create New Task", createTaskLink),
+			"Edit Organization (coming soon)",
+		}
+
+		out += md.BulletList(adminActionItems) + "\n\n"
 
 		// Show pending applications for this organization's tasks
 		pendingApps := []*Application{}
@@ -795,69 +813,77 @@ func organizationHandler(res *mux.ResponseWriter, req *mux.Request) {
 		}
 
 		if len(pendingApps) > 0 {
-			b.WriteString("### 📨 Pending Applications (" + strconv.Itoa(len(pendingApps)) + ")\n\n")
+			out += md.H3("📨 Pending Applications ("+strconv.Itoa(len(pendingApps))+")") + "\n\n"
 
 			for _, app := range pendingApps {
 				task := getTask(app.TaskID)
 				if task != nil {
 					applicantName := profile.GetStringField(app.Applicant, "DisplayName", "Unknown")
 
-					b.WriteString("---\n\n")
-					b.WriteString("**Task:** [" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ")\n")
-					b.WriteString("**Applicant:** [" + applicantName + "](" + realmPath + ":user/" + app.Applicant.String() + ")\n")
-					b.WriteString("**Applied:** Block #" + strconv.FormatInt(app.AppliedAt, 10) + "\n")
+					out += md.HorizontalRule() + "\n\n"
 
-					if app.Message != "" {
-						b.WriteString("**Message:** " + app.Message + "\n")
+					appInfoItems := []string{
+						md.Bold("Task:") + " " + md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID)),
+						md.Bold("Applicant:") + " " + md.Link(applicantName, realmPath+":user/"+app.Applicant.String()),
+						md.Bold("Applied:") + " Block #" + strconv.FormatInt(app.AppliedAt, 10),
 					}
 
-					b.WriteString("\n**Actions:**\n")
+					if app.Message != "" {
+						appInfoItems = append(appInfoItems, md.Bold("Message:")+" "+app.Message)
+					}
+
+					out += md.BulletList(appInfoItems) + "\n\n"
 
 					acceptLink := txlink.Call("AcceptApplication", strconv.Itoa(app.ID))
 					rejectLink := txlink.Call("RejectApplication", strconv.Itoa(app.ID))
 
-					b.WriteString("- [✅ Accept](" + acceptLink + ")\n")
-					b.WriteString("- [❌ Reject](" + rejectLink + ")\n\n")
+					actionItems := []string{
+						md.Link("✅ Accept", acceptLink),
+						md.Link("❌ Reject", rejectLink),
+					}
+
+					out += md.Bold("Actions:") + "\n"
+					out += md.BulletList(actionItems) + "\n\n"
 				}
 			}
 		}
 
 		// Organization Kanban Board
-		b.WriteString("### 📋 Organization Kanban Board\n\n")
-		b.WriteString("[View Full Kanban](" + realmPath + ":organization/" + strconv.Itoa(org.ID) + "/kanban)\n\n")
-		b.WriteString(renderOrganizationKanbanPreview(org))
+		out += md.H3("📋 Organization Kanban Board") + "\n\n"
+		out += md.Link("View Full Kanban", realmPath+":organization/"+strconv.Itoa(org.ID)+"/kanban") + "\n\n"
+		out += renderOrganizationKanbanPreview(org)
 	}
 
-	res.Write(b.String())
+	res.Write(out)
 }
 
 func organizationKanbanHandler(res *mux.ResponseWriter, req *mux.Request) {
-	var b strings.Builder
+	var out string
 
 	orgIDStr := req.GetVar("id")
 	orgID, err := strconv.Atoi(orgIDStr)
 	if err != nil {
-		b.WriteString("# ❌ Error\n\n")
-		b.WriteString("Invalid organization ID: " + orgIDStr + "\n")
-		res.Write(b.String())
+		out += md.H1("❌ Error") + "\n\n"
+		out += "Invalid organization ID: " + orgIDStr + "\n"
+		res.Write(out)
 		return
 	}
 
 	org := getOrganization(orgID)
 	if org == nil {
-		b.WriteString("# ❌ Not Found\n\n")
-		b.WriteString("Organization #" + orgIDStr + " not found.\n\n")
-		res.Write(b.String())
+		out += md.H1("❌ Not Found") + "\n\n"
+		out += "Organization #" + orgIDStr + " not found.\n\n"
+		res.Write(out)
 		return
 	}
 
-	b.WriteString("# 📋 " + org.Name + " - Kanban Board\n\n")
-	b.WriteString("[← Back to Organization](" + realmPath + ":organization/" + orgIDStr + ")\n\n")
+	out += md.H1("📋 "+org.Name+" - Kanban Board") + "\n\n"
+	out += md.Link("← Back to Organization", realmPath+":organization/"+orgIDStr) + "\n\n"
 
 	// Full kanban board for organization
-	b.WriteString(renderOrganizationKanban(org))
+	out += renderOrganizationKanban(org)
 
-	res.Write(b.String())
+	res.Write(out)
 }
 
 func CreateOrganization(cur realm, name, domain, bio, website, avatar string) {
@@ -1365,11 +1391,11 @@ func renderUserKanban(addr std.Address) string {
 }
 
 func renderOrganizationKanbanPreview(org *Organization) string {
-	var b strings.Builder
+	var out string
 
 	if len(org.Tasks) == 0 {
-		b.WriteString("No tasks yet.\n\n")
-		return b.String()
+		out += "No tasks yet.\n\n"
+		return out
 	}
 
 	// Count by status for preview
@@ -1391,20 +1417,25 @@ func renderOrganizationKanbanPreview(org *Organization) string {
 		}
 	}
 
-	b.WriteString("**Total Tasks:** " + strconv.Itoa(len(org.Tasks)) + "\n\n")
-	b.WriteString("🟢 Open: " + strconv.Itoa(openCount) + " | ")
-	b.WriteString("🟡 Assigned: " + strconv.Itoa(assignedCount) + " | ")
-	b.WriteString("✅ Completed: " + strconv.Itoa(completedCount) + "\n\n")
+	out += md.Bold("Total Tasks:") + " " + strconv.Itoa(len(org.Tasks)) + "\n\n"
 
-	return b.String()
+	statusSummary := []string{
+		"🟢 Open: " + strconv.Itoa(openCount),
+		"🟡 Assigned: " + strconv.Itoa(assignedCount),
+		"✅ Completed: " + strconv.Itoa(completedCount),
+	}
+
+	out += strings.Join(statusSummary, " | ") + "\n\n"
+
+	return out
 }
 
 func renderOrganizationKanban(org *Organization) string {
-	var b strings.Builder
+	var out string
 
 	if len(org.Tasks) == 0 {
-		b.WriteString("No tasks yet.\n\n")
-		return b.String()
+		out += "No tasks yet.\n\n"
+		return out
 	}
 
 	// Organize by status
@@ -1427,41 +1458,41 @@ func renderOrganizationKanban(org *Organization) string {
 	}
 
 	// Render organization kanban
-	b.WriteString("| 🟢 Open (" + strconv.Itoa(len(openTasks)) + ") | 🟡 Assigned (" + strconv.Itoa(len(assignedTasks)) + ") | ✅ Completed (" + strconv.Itoa(len(completedTasks)) + ") |\n")
-	b.WriteString("|---------|------------|-------------|\n")
+	out += "| 🟢 Open (" + strconv.Itoa(len(openTasks)) + ") | 🟡 Assigned (" + strconv.Itoa(len(assignedTasks)) + ") | ✅ Completed (" + strconv.Itoa(len(completedTasks)) + ") |\n"
+	out += "|---------|------------|-------------|\n"
 
 	maxRows := max(max(len(openTasks), len(assignedTasks)), len(completedTasks))
 
 	for i := 0; i < maxRows; i++ {
-		b.WriteString("| ")
+		out += "| "
 
 		// Open tasks column
 		if i < len(openTasks) {
 			task := openTasks[i]
-			b.WriteString("[" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") (" + strconv.Itoa(len(task.Applications)) + " apps)")
+			out += md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID)) + " (" + strconv.Itoa(len(task.Applications)) + " apps)"
 		}
-		b.WriteString(" | ")
+		out += " | "
 
 		// Assigned tasks column
 		if i < len(assignedTasks) {
 			task := assignedTasks[i]
 			assigneeName := profile.GetStringField(task.Assignee, "DisplayName", "Unknown")
 			kanbanStatus := getKanbanStatusText(task.KanbanStatus)
-			b.WriteString("[" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") by [" + assigneeName + "](" + realmPath + ":user/" + task.Assignee.String() + ") - " + kanbanStatus)
+			out += md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID)) + " by " + md.Link(assigneeName, realmPath+":user/"+task.Assignee.String()) + " - " + kanbanStatus
 		}
-		b.WriteString(" | ")
+		out += " | "
 
 		// Completed tasks column
 		if i < len(completedTasks) {
 			task := completedTasks[i]
 			assigneeName := profile.GetStringField(task.Assignee, "DisplayName", "Unknown")
-			b.WriteString("[" + task.Title + "](" + realmPath + ":task/" + strconv.Itoa(task.ID) + ") by [" + assigneeName + "](" + realmPath + ":user/" + task.Assignee.String() + ")")
+			out += md.Link(task.Title, realmPath+":task/"+strconv.Itoa(task.ID)) + " by " + md.Link(assigneeName, realmPath+":user/"+task.Assignee.String())
 		}
-		b.WriteString(" |\n")
+		out += " |\n"
 	}
 
-	b.WriteString("\n")
-	return b.String()
+	out += "\n"
+	return out
 }
 
 func renderTaskSummary(task *Task) string {
