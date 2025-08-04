@@ -48,13 +48,9 @@ func CreateTask(cur realm, orgIDStr, title, description, reward string) {
 	organizations.Set(strconv.Itoa(orgID), org)
 }
 
-// CompleteTask marks a task as completed by the assignee
-func CompleteTask(cur realm,taskIDStr string) {
+// CompleteTask marks a task as completed by the organization admin
+func CompleteTask(cur realm, taskIDStr string) {
 	caller := std.OriginCaller()
-
-	if taskIDStr == "" {
-		panic("Task ID is required")
-	}
 
 	taskID, err := strconv.Atoi(taskIDStr)
 	if err != nil {
@@ -70,8 +66,13 @@ func CompleteTask(cur realm,taskIDStr string) {
 		panic("Task is not assigned")
 	}
 
-	if task.Assignee != caller {
-		panic("Only assignee can complete task")
+	org := getOrganization(task.OrganizationID)
+	if org == nil {
+		panic("Organization not found")
+	}
+
+	if org.Admin != caller {
+		panic("Only organization admin can complete task")
 	}
 
 	task.Status = TaskCompleted
