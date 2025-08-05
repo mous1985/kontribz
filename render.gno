@@ -381,13 +381,11 @@ func organizationHandler(res *mux.ResponseWriter, req *mux.Request) {
 				}
 			}
 		}
-
-		// Organization Kanban Board
-		out += md.H3("📋 Organization Kanban Board") + "\n\n"
-		out += md.Link("View Full Kanban", realmPath+":organization/"+strconv.Itoa(org.ID)+"/kanban") + "\n\n"
-		out += renderOrganizationKanbanPreview(org)
-	}
-
+	}	
+	// Organization Kanban Board
+	out += md.H3("📋 Organization Kanban Board") + "\n\n"
+	out += md.Link("View Full Kanban", realmPath+":organization/"+strconv.Itoa(org.ID)+"/kanban") + "\n\n"
+	out += renderOrganizationKanbanPreview(org)	
 	res.Write(out)
 }
 
@@ -501,7 +499,7 @@ func tasksHandler(res *mux.ResponseWriter, req *mux.Request) {
 	if taskCount == 0 {
 		out += md.Bold("No tasks yet.") + "\n\n"
 		out += "Organizations can create tasks for their bounties.\n\n"
-		out += md.Link("Create First Task", realmPath+":task/create") + "\n\n"
+		out += md.Link("Browse Organizations", realmPath+":organizations") + " to find an organization and create tasks.\n\n"
 		res.Write(out)
 		return
 	}

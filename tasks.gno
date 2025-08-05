@@ -81,6 +81,7 @@ func CompleteTask(cur realm, taskIDStr string) {
 }
 
 // updates the kanban status of an assigned task
+// Assignee can update all statuses
 func UpdateKanbanStatus(cur realm, taskIDStr, statusIDStr string) {
 	caller := std.OriginCaller()
 
@@ -107,11 +108,27 @@ func UpdateKanbanStatus(cur realm, taskIDStr, statusIDStr string) {
 		panic("Task not found")
 	}
 
-	if task.Assignee != caller {
-		panic("Only assignee can update kanban status")
+	org := getOrganization(task.OrganizationID)
+	if org == nil {
+		panic("Organization not found")
 	}
 
-	task.KanbanStatus = KanbanStatus(statusInt)
+	// Check permissions based on status
+	isAssignee := task.Assignee == caller
+	isOrgAdmin := org.Admin == caller
+	targetStatus := KanbanStatus(statusInt)
+
+
+	if !isAssignee && !isOrgAdmin {
+		panic("Only assignee or organization admin can update kanban status")
+	}
+
+	// Organization admin can only update Review (2) and Done (3)
+	if !isAssignee && isOrgAdmin && (targetStatus != KanbanReview && targetStatus != KanbanDone) {
+		panic("Organization admin can only set Review or Done status")
+	}
+
+	task.KanbanStatus = targetStatus
 	tasks.Set(strconv.Itoa(taskID), task)
 }
 
