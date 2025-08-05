@@ -169,24 +169,28 @@ func userKanbanHandler(res *mux.ResponseWriter, req *mux.Request) {
 
 		// List assigned tasks with update links
 		tasks.Iterate("", "", func(key string, value interface{}) bool {
-			task := value.(*Task)
-			if task.Assignee == addr && task.Status == TaskAssigned {
-				out += md.H3(task.Title) + "\n\n"
-				out += md.Bold("Current Status:") + " " + getKanbanStatusText(task.KanbanStatus) + "\n\n"
+				task := value.(*Task)
+				org := getOrganization(task.OrganizationID)
+				if task.Assignee == addr && task.Status == TaskAssigned {
+					out += md.H3(task.Title) + "\n\n"
+					out += md.Bold("Current Status:") + " " + getKanbanStatusText(task.KanbanStatus) + "\n\n"
 
-				// Action links for kanban status
-				todoLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "0")     // KanbanTodo
-				progressLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "1") // KanbanInProgress
-				reviewLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "2")   // KanbanReview
-				doneLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "3")     // KanbanDone
-				completeLink := txlink.Call("CompleteTask", strconv.Itoa(task.ID))
+					// Action links for kanban status
+					todoLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "0")     // KanbanTodo
+					progressLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "1") // KanbanInProgress
+					reviewLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "2")   // KanbanReview
+					doneLink := txlink.Call("UpdateKanbanStatus", strconv.Itoa(task.ID), "3")     // KanbanDone
 
-				actionItems := []string{
-					md.Link("📝 Todo", todoLink),
-					md.Link("🔄 In Progress", progressLink),
-					md.Link("👀 Review", reviewLink),
-					md.Link("✅ Done", doneLink),
-					md.Link("🎉 Complete Task", completeLink),
+					actionItems := []string{
+						md.Link("📝 Todo", todoLink),
+						md.Link("🔄 In Progress", progressLink),
+						md.Link("👀 Review", reviewLink),
+						md.Link("✅ Done", doneLink),
+				}
+
+				if org != nil && org.Admin == caller {
+					completeLink := txlink.Call("CompleteTask", strconv.Itoa(task.ID))
+					actionItems = append(actionItems, md.Link("🎉 Complete Task", completeLink))
 				}
 
 				out += md.Bold("Update Status:") + "\n"
@@ -377,13 +381,11 @@ func organizationHandler(res *mux.ResponseWriter, req *mux.Request) {
 				}
 			}
 		}
-
-		// Organization Kanban Board
-		out += md.H3("📋 Organization Kanban Board") + "\n\n"
-		out += md.Link("View Full Kanban", realmPath+":organization/"+strconv.Itoa(org.ID)+"/kanban") + "\n\n"
-		out += renderOrganizationKanbanPreview(org)
-	}
-
+	}	
+	// Organization Kanban Board
+	out += md.H3("📋 Organization Kanban Board") + "\n\n"
+	out += md.Link("View Full Kanban", realmPath+":organization/"+strconv.Itoa(org.ID)+"/kanban") + "\n\n"
+	out += renderOrganizationKanbanPreview(org)	
 	res.Write(out)
 }
 
@@ -497,7 +499,7 @@ func tasksHandler(res *mux.ResponseWriter, req *mux.Request) {
 	if taskCount == 0 {
 		out += md.Bold("No tasks yet.") + "\n\n"
 		out += "Organizations can create tasks for their bounties.\n\n"
-		out += md.Link("Create First Task", realmPath+":task/create") + "\n\n"
+		out += md.Link("Browse Organizations", realmPath+":organizations") + " to find an organization and create tasks.\n\n"
 		res.Write(out)
 		return
 	}
